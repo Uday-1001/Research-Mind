@@ -1,4 +1,4 @@
-# ResearchMind - Multi-Agent AI System
+# 🧐 ResearchMind - Multi-Agent AI System
 
 ResearchMind is an advanced, multi-agent AI research assistant built with Streamlit, LangChain, and Groq's high-performance LLM APIs. By employing a sequential pipeline of specialized AI agents and chains, the application can autonomously query the web, scrape in-depth content from relevant sources, draft a comprehensive and structured research report, and provide an objective critique of its own output. 
 
@@ -18,32 +18,43 @@ The architecture follows a linear, four-step pipeline managed through Streamlit'
 
 ```mermaid
 graph TD
-    User([User Input: Research Topic]) --> UI[Streamlit UI]
-    UI -->|Start Pipeline| SA
+    User([User Input: Research Topic]) ==> UI[Streamlit UI]
+    UI ==>|Start Pipeline| SA
     
     subgraph Multi-Agent Research Pipeline
-        SA[1. Search Agent] -- "Queries Web" --> Tavily((Tavily API))
-        SA -->|Search Results| RA[2. Reader Agent]
+        SA[1. Search Agent] ==>|Search Results| RA[2. Reader Agent]
+        SA -. "Queries Web" .-> Tavily((Tavily API))
         
-        RA -- "Scrapes Content" --> WebSites((External Websites))
-        RA -->|Scraped Details| WC[3. Specialized Writer]
+        RA ==>|Scraped Details| WC[3. Specialized Writer]
+        RA -. "Scrapes Content" .-> WebSites((External Websites))
         
-        WC -->|Drafts Report| CC[4. Report Critic]
+        WC ==>|Drafts Report| CC[4. Report Critic]
     end
     
     Engine{{LLM Engine: Groq API + Auto-Retry Fallback}}
-    SA -.- Engine
-    RA -.- Engine
-    WC -.- Engine
-    CC -.- Engine
+    SA -. "LLM Calls" .-> Engine
+    RA -. "LLM Calls" .-> Engine
+    WC -. "LLM Calls" .-> Engine
+    CC -. "LLM Calls" .-> Engine
     
-    SA -.->|Save Progress| DB[(SQLite Database)]
-    RA -.->|Save Progress| DB
-    WC -.->|Save Progress| DB
-    CC -.->|Save Progress| DB
+    SA -. "Save Progress" .-> DB[(SQLite Database)]
+    RA -. "Save Progress" .-> DB
+    WC -. "Save Progress" .-> DB
+    CC -. "Save Progress" .-> DB
     
-    WC -->|Final Research Report| UI
-    CC -->|Review & Score| UI
+    WC ==>|Final Research Report| UI
+    CC ==>|Review & Score| UI
+
+    style User fill:#4b5563,stroke:#374151,stroke-width:2px,color:#fff
+    style UI fill:#f97316,stroke:#ea580c,stroke-width:2px,color:#fff
+    style SA fill:#3b82f6,stroke:#2563eb,stroke-width:2px,color:#fff,rx:8,ry:8
+    style RA fill:#3b82f6,stroke:#2563eb,stroke-width:2px,color:#fff,rx:8,ry:8
+    style WC fill:#3b82f6,stroke:#2563eb,stroke-width:2px,color:#fff,rx:8,ry:8
+    style CC fill:#3b82f6,stroke:#2563eb,stroke-width:2px,color:#fff,rx:8,ry:8
+    style Tavily fill:#8b5cf6,stroke:#7c3aed,stroke-width:2px,color:#fff
+    style WebSites fill:#8b5cf6,stroke:#7c3aed,stroke-width:2px,color:#fff
+    style DB fill:#10b981,stroke:#059669,stroke-width:2px,color:#fff
+    style Engine fill:#ef4444,stroke:#dc2626,stroke-width:2px,color:#fff
 ```
 
 ### Pipeline Details
