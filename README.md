@@ -10,8 +10,7 @@ ResearchMind is an advanced, multi-agent AI research assistant built with Stream
 - **Report Critic**: Evaluates the drafted report for quality, accuracy, and depth, providing a score and actionable feedback.
 - **Session Management**: Automatically saves progress and research history into a local SQLite database. Includes safe deletion with confirmation dialogs.
 - **Modern UI**: A sleek, custom-styled interface built entirely using Streamlit, featuring responsive design, interactive chips, and polished micro-animations.
-- **Resilient AI Pipeline**: Uses Groq's high-throughput `llama-3.3-70b-versatile` model with automatic retry logic to gracefully handle rate limits and capacity constraints.
-
+- **Distributed Multi-Model AI Pipeline**: Intelligently routes tasks across specialized LLMs (e.g. `gpt-oss-120b`, `llama-3.3-70b-versatile`, and `gpt-oss-20b`) to balance load and preserve high-tier API quota. It utilizes fail-fast fallback logic to gracefully handle rate limits and capacity constraints without freezing the UI.
 ## Architecture & Workflow
 
 The architecture follows a linear, four-step pipeline managed through Streamlit's session state.
@@ -31,7 +30,7 @@ graph TD
         WC ==>|Drafts Report| CC[4. Report Critic]
     end
     
-    Engine{{LLM Engine: Groq API + Auto-Retry Fallback}}
+    Engine{{"<br/>Distributed LLMs:<br/>Groq API + Fallbacks<br/>"}}
     SA -. "LLM Calls" .-> Engine
     RA -. "LLM Calls" .-> Engine
     WC -. "LLM Calls" .-> Engine
@@ -62,8 +61,8 @@ graph TD
 1. **User Input:** The user provides a research topic via the Streamlit UI.
 2. **Search Agent:** A LangChain agent (`build_search_agent`) initialized with a `web_search` tool interacts with the Tavily API to gather initial findings and top URLs.
 3. **Reader Agent:** A second LangChain agent (`build_reader_agent`) equipped with a `scrape_url` tool is prompted to pick the most relevant URL from the Search Agent's results and scrape its content.
-4. **Specialized Writer:** The search results and scraped website content are merged and passed through a LangChain LCEL (LangChain Expression Language) pipeline (`writer_chain`) to formulate a detailed markdown report.
-5. **Report Critic:** The generated report is then sent to another LCEL chain (`critic_chain`) which reviews the text and returns a critical evaluation and a score out of 10.
+4. **Specialized Writer:** The search results and scraped website content are merged and passed through a LangChain LCEL pipeline (`writer_chain`) to formulate a detailed markdown report.
+5. **Report Critic:** The generated report is then sent to another LCEL chain (`critic_chain`) which reviews the text and returns a critical evaluation and a score out of 10. The prompt spacing is optimized for browser rendering using HTML non-breaking spaces.
 
 ## Getting Started
 
@@ -76,9 +75,10 @@ graph TD
 ### Setup
 
 1. **Clone the repository.**
-2. **Install dependencies:**
+2. **Install dependencies (uv is recommended):**
    ```bash
-   pip install -r requirements.txt
+   uv sync
+   # or pip install -r requirements.txt
    ```
 3. **Configure Environment Variables:**
    Create a `.env` file in the root directory and add your keys:
@@ -88,5 +88,5 @@ graph TD
    ```
 4. **Run the application:**
    ```bash
-   streamlit run app.py
+   uv run streamlit run app.py
    ```

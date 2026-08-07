@@ -275,7 +275,11 @@ header[data-testid="stHeader"] { background: transparent !important; }
     border-color: rgba(72,199,116,0.28);
     background: rgba(72,199,116,0.03);
 }
-.step-card.done::before { background: #48c774; }
+.step-card.error {
+    border-color: rgba(230,57,70,0.35);
+    background: rgba(230,57,70,0.04);
+}
+.step-card.error::before { background: #e63946; }
 
 .step-top {
     display: flex;
@@ -309,6 +313,7 @@ header[data-testid="stHeader"] { background: transparent !important; }
 .badge-run  { color: #ff8c32; background: rgba(255,140,50,0.1); border: 1px solid rgba(255,140,50,0.2);
               animation: badge-pulse 1.5s ease-in-out infinite; }
 .badge-done { color: #48c774; background: rgba(72,199,116,0.1); border: 1px solid rgba(72,199,116,0.2); }
+.badge-error { color: #e63946; background: rgba(230,57,70,0.1); border: 1px solid rgba(230,57,70,0.2); }
 
 @keyframes badge-pulse {
     0%, 100% { opacity: 1; }
@@ -444,9 +449,9 @@ header[data-testid="stHeader"] { background: transparent !important; }
 
 # Session state & Sidebar UI
 
-for key in ("results", "running", "done"):
+for key in ("results", "running", "done", "error_step", "error_msg"):
     if key not in st.session_state:
-        st.session_state[key] = {} if key == "results" else False
+        st.session_state[key] = {} if key == "results" else (False if key in ["running", "done"] else None)
 
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
@@ -464,6 +469,8 @@ def confirm_delete_dialog(sess_id):
             st.session_state.results = {}
             st.session_state.running = False
             st.session_state.done = False
+            st.session_state.error_step = None
+            st.session_state.error_msg = None
             st.session_state.topic_input = ""
         st.rerun()
     if col2.button("Cancel", use_container_width=True):
@@ -477,6 +484,8 @@ with st.sidebar:
         st.session_state.results = {}
         st.session_state.running = False
         st.session_state.done = False
+        st.session_state.error_step = None
+        st.session_state.error_msg = None
         st.session_state.topic_input = ""
         st.rerun()
     
@@ -502,6 +511,8 @@ with st.sidebar:
                     st.session_state.results = sess["results"]
                     st.session_state.running = False
                     st.session_state.done = True
+                    st.session_state.error_step = None
+                    st.session_state.error_msg = None
                     st.rerun()
             with c2:
                 if st.button("🗑️", key=f"del_{sess['id']}", use_container_width=True):
@@ -513,9 +524,9 @@ PIPELINE_STEPS = ["search", "reader", "writer", "critic"]
 # Helper: step card renderer
 
 def render_step(num: str, icon: str, title: str, desc: str, state: str):
-    card_cls   = {"running": "active", "done": "done"}.get(state, "")
-    badge_cls  = {"running": "badge-run", "done": "badge-done", "waiting": "badge-wait"}[state]
-    badge_txt  = {"running": "● Running", "done": "✓ Done", "waiting": "Waiting"}[state]
+    card_cls   = {"running": "active", "done": "done", "error": "error"}.get(state, "")
+    badge_cls  = {"running": "badge-run", "done": "badge-done", "waiting": "badge-wait", "error": "badge-error"}[state]
+    badge_txt  = {"running": "● Running", "done": "✓ Done", "waiting": "Waiting", "error": "✖ Failed"}[state]
     st.markdown(f"""
     <div class="step-card {card_cls}">
         <div class="step-top">
@@ -533,6 +544,8 @@ def get_step_state(step: str) -> str:
     r = st.session_state.results
     if step in r:
         return "done"
+    if st.session_state.get("error_step") == step:
+        return "error"
     if st.session_state.running:
         for k in PIPELINE_STEPS:
             if k not in r:
@@ -608,6 +621,8 @@ if run_btn:
         st.session_state.results = {}
         st.session_state.running = True
         st.session_state.done    = False
+        st.session_state.error_step = None
+        st.session_state.error_msg = None
         st.rerun()
 
 
@@ -689,18 +704,29 @@ if st.session_state.running and not st.session_state.done:
         st.rerun()
 
     except Exception as e:
-        status_box.empty()
         error_msg = str(e)
+        for k in PIPELINE_STEPS:
+            if k not in results:
+                st.session_state.error_step = k
+                break
+        
         if "429" in error_msg or "Rate limit" in error_msg or "rate_limit_exceeded" in error_msg:
-            st.error("⚠️ **AI is not available at the moment**\n\nThe provider is currently at capacity. Please wait a few moments and try again.")
+            st.session_state.error_msg = "rate_limit"
         else:
-            st.error(f"⚠️ **An unexpected error occurred:**\n\n`{error_msg}`\n\nPlease try again.")
+            st.session_state.error_msg = error_msg
+            
         st.session_state.running = False
-        st.stop()
-
+        st.rerun()
 
 
 # Result Display
+
+if st.session_state.get("error_msg"):
+    st.markdown('<div class="hr-glow"></div>', unsafe_allow_html=True)
+    if st.session_state.error_msg == "rate_limit":
+        st.error("⚠️ **AI is not available at the moment**\n\nThe provider is currently at capacity. Please wait a few moments and try again.")
+    else:
+        st.error(f"⚠️ **An unexpected error occurred:**\n\n`{st.session_state.error_msg}`\n\nPlease try again.")
 
 r = st.session_state.results
 
