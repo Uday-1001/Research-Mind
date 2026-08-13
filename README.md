@@ -9,51 +9,56 @@ ResearchMind is an advanced, multi-agent AI research assistant built with Stream
 - **Specialized Writer**: Processes all gathered context to draft a professional, well-structured research report in Markdown.
 - **Report Critic**: Evaluates the drafted report for quality, accuracy, and depth, providing a score and actionable feedback.
 - **Session Management**: Automatically saves progress and research history into a local SQLite database. Includes safe deletion with confirmation dialogs.
-- **Modern UI**: A sleek, custom-styled interface built entirely using Streamlit, featuring responsive design, interactive chips, and polished micro-animations.
+- **Advanced Export Capabilities**: Download final reports natively as high-quality Word Documents (`.docx`) or Markdown (`.md`) files.
+- **Modern UI**: A sleek, custom-styled interface built entirely using Streamlit, featuring responsive design, dynamic layout adjustments for perfect vertical alignments, and polished micro-animations.
+- **Strict Formatting Guardrails**: Built-in prompt engineering explicitly enforces strict Markdown and LaTeX rules, preventing Streamlit rendering bugs when generating tables or complex math equations.
+- **Iterative Self-Correction**: Features an autonomous re-evaluation loop where the Report Critic can reject a draft and send feedback back to the Writer Agent for up to 3 iterative revisions.
 - **Distributed Multi-Model AI Pipeline**: Intelligently routes tasks across specialized LLMs (e.g. `gpt-oss-120b`, `llama-3.3-70b-versatile`, and `gpt-oss-20b`) to balance load and preserve high-tier API quota. It utilizes fail-fast fallback logic to gracefully handle rate limits and capacity constraints without freezing the UI.
 ## Architecture & Workflow
 
 The architecture follows a linear, four-step pipeline managed through Streamlit's session state.
 
 ```mermaid
-graph TD
-    User([User Input: Research Topic]) ==> UI[Streamlit UI]
-    UI ==>|Start Pipeline| SA
+flowchart TD
+    classDef user fill:#1e293b,stroke:#0f172a,stroke-width:2px,color:#fff,rx:20,ry:20
+    classDef ui fill:#ea580c,stroke:#9a3412,stroke-width:2px,color:#fff,rx:10,ry:10
+    classDef agent fill:#0284c7,stroke:#0369a1,stroke-width:2px,color:#fff,rx:8,ry:8
+    classDef integration fill:#7c3aed,stroke:#5b21b6,stroke-width:2px,color:#fff
+    classDef container fill:none,stroke:#64748b,stroke-width:2px,stroke-dasharray: 5 5,color:#e2e8f0
     
-    subgraph Multi-Agent Research Pipeline
-        SA[1. Search Agent] ==>|Search Results| RA[2. Reader Agent]
-        SA -. "Queries Web" .-> Tavily((Tavily API))
+    User([👤 User]) -->|Enters Research Topic| UI{💻 Streamlit UI}
+    
+    subgraph MultiAgentPipeline[Autonomous<br/>Research Pipeline]
+        direction TB
         
-        RA ==>|Scraped Details| WC[3. Specialized Writer]
-        RA -. "Scrapes Content" .-> WebSites((External Websites))
+        Search[🔍 1. Search Agent] 
+        Reader[📃 2. Reader Agent]
+        Writer[✍️ 3. Specialized Writer]
+        Critic[🧐 4. Report Critic]
         
-        WC ==>|Drafts Report| CC[4. Report Critic]
+        Search ==>|Top Search Links| Reader
+        Reader ==>|Scraped Raw Data| Writer
+        Writer ==>|Generates Draft| Critic
+        
+        Critic -.->|❌ Fails: Iterative Feedback Loop| Writer
     end
     
-    Engine{{"<br/>Distributed LLMs:<br/>Groq API + Fallbacks<br/>"}}
-    SA -. "LLM Calls" .-> Engine
-    RA -. "LLM Calls" .-> Engine
-    WC -. "LLM Calls" .-> Engine
-    CC -. "LLM Calls" .-> Engine
+    UI ==>|Triggers Execution| Search
+    Critic ==>|✅ Passes: Final Report| UI
     
-    SA -. "Save Progress" .-> DB[(SQLite Database)]
-    RA -. "Save Progress" .-> DB
-    WC -. "Save Progress" .-> DB
-    CC -. "Save Progress" .-> DB
+    %% Integrations
+    Tavily[(🌐 Tavily Search API)]
+    Sites[[🕸️ Live Websites]]
     
-    WC ==>|Final Research Report| UI
-    CC ==>|Review & Score| UI
+    Tavily -.->|Search Results| Search
+    Sites -.->|HTML Text Content| Reader
 
-    style User fill:#4b5563,stroke:#374151,stroke-width:2px,color:#fff
-    style UI fill:#f97316,stroke:#ea580c,stroke-width:2px,color:#fff
-    style SA fill:#3b82f6,stroke:#2563eb,stroke-width:2px,color:#fff,rx:8,ry:8
-    style RA fill:#3b82f6,stroke:#2563eb,stroke-width:2px,color:#fff,rx:8,ry:8
-    style WC fill:#3b82f6,stroke:#2563eb,stroke-width:2px,color:#fff,rx:8,ry:8
-    style CC fill:#3b82f6,stroke:#2563eb,stroke-width:2px,color:#fff,rx:8,ry:8
-    style Tavily fill:#8b5cf6,stroke:#7c3aed,stroke-width:2px,color:#fff
-    style WebSites fill:#8b5cf6,stroke:#7c3aed,stroke-width:2px,color:#fff
-    style DB fill:#10b981,stroke:#059669,stroke-width:2px,color:#fff
-    style Engine fill:#ef4444,stroke:#dc2626,stroke-width:2px,color:#fff
+    %% Apply Classes
+    class User user
+    class UI ui
+    class Search,Reader,Writer,Critic agent
+    class Tavily,Sites integration
+    class MultiAgentPipeline container
 ```
 
 ### Pipeline Details
@@ -62,7 +67,7 @@ graph TD
 2. **Search Agent:** A LangChain agent (`build_search_agent`) initialized with a `web_search` tool interacts with the Tavily API to gather initial findings and top URLs.
 3. **Reader Agent:** A second LangChain agent (`build_reader_agent`) equipped with a `scrape_url` tool is prompted to pick the most relevant URL from the Search Agent's results and scrape its content.
 4. **Specialized Writer:** The search results and scraped website content are merged and passed through a LangChain LCEL pipeline (`writer_chain`) to formulate a detailed markdown report.
-5. **Report Critic:** The generated report is then sent to another LCEL chain (`critic_chain`) which reviews the text and returns a critical evaluation and a score out of 10. The prompt spacing is optimized for browser rendering using HTML non-breaking spaces.
+5. **Report Critic:** The generated report is then sent to another LCEL chain (`critic_chain`) which reviews the text and returns a critical evaluation. If the report needs improvement, the Critic feeds its review back to the Writer for up to 3 iterative revisions. The final result is displayed to the user.
 
 ## Getting Started
 

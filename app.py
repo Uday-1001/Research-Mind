@@ -346,7 +346,8 @@ header[data-testid="stHeader"] { background: transparent !important; }
     font-size: 0.7rem;
     color: #c07830;
     letter-spacing: 0.05em;
-    white-space: nowrap;
+    white-space: normal;
+    word-break: break-word;
 }
 /* CSS spinner replacing static dot */
 .live-spinner {
@@ -415,7 +416,6 @@ header[data-testid="stHeader"] { background: transparent !important; }
     align-items: center;
     gap: 0.5rem;
 }
-/* empty */
 
 /*  Expander  */
 .stExpander {
@@ -423,6 +423,13 @@ header[data-testid="stHeader"] { background: transparent !important; }
     border: 1px solid rgba(255,255,255,0.07) !important;
     border-radius: 12px !important;
     margin-bottom: 0.75rem !important;
+}
+
+/* Force wrapping for alerts to prevent overflowing the window */
+[data-testid="stAlert"] {
+    white-space: normal !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
 }
 
 /*  Download button  */
@@ -449,9 +456,16 @@ header[data-testid="stHeader"] { background: transparent !important; }
 
 # Session state & Sidebar UI
 
-for key in ("results", "running", "done", "error_step", "error_msg"):
+for key in ("results", "running", "done", "error_step", "error_msg", "revision_count", "eval_msg"):
     if key not in st.session_state:
-        st.session_state[key] = {} if key == "results" else (False if key in ["running", "done"] else None)
+        if key == "results":
+            st.session_state[key] = {}
+        elif key in ["running", "done"]:
+            st.session_state[key] = False
+        elif key == "revision_count":
+            st.session_state[key] = 0
+        else:
+            st.session_state[key] = None
 
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
@@ -472,6 +486,8 @@ def confirm_delete_dialog(sess_id):
             st.session_state.error_step = None
             st.session_state.error_msg = None
             st.session_state.topic_input = ""
+            st.session_state.revision_count = 0
+            st.session_state.eval_msg = None
         st.rerun()
     if col2.button("Cancel", use_container_width=True):
         st.rerun()
@@ -487,6 +503,8 @@ with st.sidebar:
         st.session_state.error_step = None
         st.session_state.error_msg = None
         st.session_state.topic_input = ""
+        st.session_state.revision_count = 0
+        st.session_state.eval_msg = None
         st.rerun()
     
     st.markdown("<hr style='border-color: rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
@@ -496,7 +514,7 @@ with st.sidebar:
     if not past_sessions:
         st.markdown('<div style="color: #8a8278; font-size: 0.8rem; text-align: center;">No history yet.</div>', unsafe_allow_html=True)
     else:
-        for sess in past_sessions:
+        def render_session_button(sess):
             c1, c2 = st.columns([5, 1])
             
             # Use truncated topic for the button label
@@ -513,10 +531,23 @@ with st.sidebar:
                     st.session_state.done = True
                     st.session_state.error_step = None
                     st.session_state.error_msg = None
+                    st.session_state.revision_count = sess["results"].get("revision_count", 0)
+                    st.session_state.eval_msg = sess["results"].get("eval_msg", None)
                     st.rerun()
             with c2:
                 if st.button("🗑️", key=f"del_{sess['id']}", use_container_width=True):
                     confirm_delete_dialog(sess["id"])
+
+        recent_sessions = past_sessions[:5]
+        older_sessions = past_sessions[5:]
+
+        for sess in recent_sessions:
+            render_session_button(sess)
+            
+        if older_sessions:
+            with st.expander("Your Past Researches 💬"):
+                for sess in older_sessions:
+                    render_session_button(sess)
 
 PIPELINE_STEPS = ["search", "reader", "writer", "critic"]
 
@@ -594,13 +625,28 @@ with col_left:
     <div class="example-topics">
         <span class="chip-label">Example Topics To Search ↓</span>
         <div class="chip-row">
-            <span class="chip">LLM agents 2025</span>
-            <span class="chip">CRISPR gene editing</span>
-            <span class="chip">Fusion energy progress</span>
-            <span class="chip">Neuromorphic chips</span>
+            <span class="chip">LLM Agents 2025</span>
+            <span class="chip">CRISPR Gene editing</span>
+            <span class="chip">Fusion Energy progress</span>
+            <span class="chip">Neuromorphic Chips</span>
+            <span class="chip">Quantum Entanglement</span>
+            <span class="chip">Dark matter & Gravitational waves</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # Dynamically adjust spacer height to perfectly align with the right column
+    # The right column is taller when the pipeline is running (due to the live status pill)
+    is_running = st.session_state.get("running", False) and not st.session_state.get("done", False)
+    spacer_height = 132 if is_running else 99
+    st.markdown(f"<div style='height: {spacer_height}px;'></div>", unsafe_allow_html=True)
+    
+    if st.session_state.get("eval_msg"):
+        msg = st.session_state.eval_msg
+        if "passed" in msg:
+            st.success(msg)
+        else:
+            st.warning(msg)
 
 with col_right:
     st.markdown('<div class="pipeline-label">⬡ &nbsp;System Status</div>', unsafe_allow_html=True)
@@ -647,7 +693,7 @@ if st.session_state.running and not st.session_state.done:
     try:
         #  Step 1: Search  save → rerun so pipeline cards refresh
         if "search" not in results:
-            show_status("Search Agent is querying the web…")
+            show_status("Search Agent is searching the web…")
             search_agent = build_search_agent()
             sr = search_agent.invoke({
                 "messages": [("user", f"Find recent, reliable and detailed information about: {topic_val}")]
@@ -676,14 +722,19 @@ if st.session_state.running and not st.session_state.done:
 
         #  Step 3: Writer 
         if "writer" not in results:
-            show_status("Writer Chain is drafting the research report…")
+            show_status(f"Writer Chain is drafting the research report (Revision {st.session_state.revision_count}/3)...")
             research_combined = (
                 f"SEARCH RESULTS:\n{results['search']}\n\n"
                 f"DETAILED SCRAPED CONTENT:\n{results['reader']}"
             )
+            feedback_text = ""
+            if st.session_state.get("revision_count", 0) > 0 and "last_critic" in results:
+                feedback_text = f"Previous Review Feedback to improve upon:\n{results['last_critic']}"
+                
             results["writer"] = writer_chain.invoke({
                 "topic":    topic_val,
-                "research": research_combined
+                "research": research_combined,
+                "feedback": feedback_text
             })
             st.session_state.results = dict(results)
             save_session(st.session_state.session_id, topic_val, dict(results))
@@ -692,11 +743,45 @@ if st.session_state.running and not st.session_state.done:
         #  Step 4: Critic 
         if "critic" not in results:
             show_status("Critic Chain is evaluating the report…")
-            results["critic"] = critic_chain.invoke({
+            critic_result = critic_chain.invoke({
                 "report": results["writer"]
             })
-            st.session_state.results = dict(results)
-            save_session(st.session_state.session_id, topic_val, dict(results))
+            
+            import re
+            match = re.search(r"Score:\s*([\d\.]+)", critic_result)
+            score = 10
+            if match:
+                try:
+                    score = float(match.group(1))
+                except ValueError:
+                    pass
+            
+            if score < 8 and st.session_state.get("revision_count", 0) < 3:
+                st.session_state.revision_count = st.session_state.get("revision_count", 0) + 1
+                results["last_critic"] = critic_result
+                st.session_state.eval_msg = f"📝 The draft needs some improvements. Asking the writer to revise it based on feedback (Revision {st.session_state.revision_count} of 3)..."
+                
+                # Rerun writer
+                del results["writer"]
+                
+                results["revision_count"] = st.session_state.revision_count
+                results["eval_msg"] = st.session_state.eval_msg
+                
+                st.session_state.results = dict(results)
+                save_session(st.session_state.session_id, topic_val, dict(results))
+                st.rerun()
+            else:
+                results["critic"] = critic_result
+                if score < 8:
+                    st.session_state.eval_msg = "⚠️ We've reached the maximum number of revisions. Presenting the best version of the report!"
+                else:
+                    st.session_state.eval_msg = "✨ Great news! The report has passed our quality check and is ready for you."
+                    
+                results["revision_count"] = st.session_state.get("revision_count", 0)
+                results["eval_msg"] = st.session_state.eval_msg
+                
+                st.session_state.results = dict(results)
+                save_session(st.session_state.session_id, topic_val, dict(results))
 
         # All done
         st.session_state.running = False
@@ -726,7 +811,9 @@ if st.session_state.get("error_msg"):
     if st.session_state.error_msg == "rate_limit":
         st.error("⚠️ **AI is not available at the moment**\n\nThe provider is currently at capacity. Please wait a few moments and try again.")
     else:
-        st.error(f"⚠️ **An unexpected error occurred:**\n\n`{st.session_state.error_msg}`\n\nPlease try again.")
+        st.error("⚠️ **We encountered an unexpected issue while generating your report.**\n\nThis could be due to a temporary service interruption or a complex formatting problem in the background. Please try running your research again. If the issue persists, try modifying your research topic slightly.")
+        with st.expander("Show detailed error log for troubleshooting"):
+            st.code(st.session_state.error_msg, language="text")
 
 r = st.session_state.results
 
@@ -753,12 +840,46 @@ if r:
         )
         st.markdown(r["writer"])
 
-        st.download_button(
-            label="👇 Download Report (.md file)",
-            data=r["writer"],
-            file_name=f"research_report_{int(time.time())}.md",
-            mime="text/markdown",
-        )
+        dl_col1, dl_col2 = st.columns(2)
+        with dl_col1:
+            st.download_button(
+                label="👇 Download Report (.md file)",
+                data=r["writer"],
+                file_name=f"Research_Report_{topic}.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
+        with dl_col2:
+            import markdown
+            from docx import Document
+            from htmldocx import HtmlToDocx
+            import io
+            
+            # Convert Markdown -> HTML -> DOCX
+            try:
+                html_content = markdown.markdown(r["writer"], extensions=['tables', 'fenced_code'])
+                doc = Document()
+                parser = HtmlToDocx()
+                parser.add_html_to_document(html_content, doc)
+                
+                # Apply visible borders to all tables
+                for table in doc.tables:
+                    table.style = 'Table Grid'
+                    
+                docx_io = io.BytesIO()
+                doc.save(docx_io)
+                docx_bytes = docx_io.getvalue()
+            except Exception as e:
+                # Fallback to plain text if conversion fails
+                docx_bytes = r["writer"].encode('utf-8')
+            
+            st.download_button(
+                label="👇 Download Report (.docx file)",
+                data=docx_bytes,
+                file_name=f"Research_Report_{topic}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True,
+            )
 
     #  Critic feedback ─
     if "critic" in r:

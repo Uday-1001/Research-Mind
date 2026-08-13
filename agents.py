@@ -30,10 +30,10 @@ llm_gpt_20b = create_model("openai/gpt-oss-20b")
 llm_gpt_120b = create_model("openai/gpt-oss-120b")
 
 # Set up specific LLMs for their roles with fallbacks to ensure stability
-llm_search = llm_llama_70b.with_fallbacks([llm_gpt_20b])
+llm_search = llm_gpt_20b.with_fallbacks([llm_llama_70b])
 llm_reader = llm_gpt_20b.with_fallbacks([llm_llama_70b])
-llm_writer = llm_gpt_120b.with_fallbacks([llm_llama_70b])
-llm_critic = llm_llama_70b.with_fallbacks([llm_gpt_120b])
+llm_writer = llm_gpt_120b.with_fallbacks([llm_gpt_20b])
+llm_critic = llm_gpt_120b.with_fallbacks([llm_llama_70b])
 
 
 # ********************************** Creating the Agents Required ************************************
@@ -66,14 +66,24 @@ Topic: {topic}
 Research Gathered:
 {research}
 
+{feedback}
+
 Structure the report as:
 - Introduction
-- Key Findings (minimum 4 well-explained points and include tabular data if needed.)
+- Key Findings (minimum 4 well-explained points. Use tables ONLY when the data is strictly in a tabular format and would be distorted or hard to understand if presented without a table.)
 - Conclusion
 - Sources (list all URLs found in the research in bulleted format and must be clickable)
 
 Be detailed, factual and professional.
-IMPORTANT: Do NOT include any external citation markers, brackets, or literals like 【1†source】 in your output. Clean all such artifacts from the text."""),
+IMPORTANT FORMATTING RULES - YOU MUST FOLLOW THESE STRICTLY:
+1. CLEAN TEXT: Do NOT include any external citation markers, search snippets, brackets, or literals like 【1†source】 in your output. Clean all such artifacts from the text.
+2. MATH & SYMBOLS: You MUST format all mathematical formulas, equations, variables, and scientific symbols using proper LaTeX. 
+   - INLINE: For math within a sentence, use a single `$` (e.g., $E=mc^2$). 
+   - BLOCK: For standalone equations, use double `$$`. You MUST place `$$` block math on its own separate new line with empty lines above and below it. NEVER place `$$` in the middle of a text line. 
+   - NO RAW MATH: Do not use raw text approximations like `r^{{-γ}}` or `ρ_DM`.
+3. TABLES: Only use Markdown tables if the underlying data is strictly tabular (e.g., comparative stats, metrics). Never use a table just to format regular text.
+4. SPACING: Always leave a blank line before and after headings, lists, tables, and block equations to ensure the Markdown renderer processes them correctly.
+5. NO XML/HTML: Stick strictly to standard Markdown. Do not use raw HTML tags or XML blocks unless explicitly required."""),
 ])
 
 writer_chain = writer_prompt | llm_writer | parser
