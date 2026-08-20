@@ -1,6 +1,6 @@
 # 🧐 ResearchMind - Multi-Agent AI System
 
-ResearchMind is an advanced, multi-agent AI research assistant built with Streamlit, LangChain, and Groq's high-performance LLM APIs. By employing a sequential pipeline of specialized AI agents and chains, the application can autonomously query the web, scrape in-depth content from relevant sources, draft a comprehensive and structured research report, and provide an objective critique of its own output. 
+ResearchMind is an advanced, multi-agent AI research assistant built with Streamlit, LangChain, alongside Groq and Google Gemini's high-performance LLM APIs. By employing a sequential pipeline of specialized AI agents and chains, the application can autonomously query the web, scrape in-depth content from relevant sources, draft a comprehensive and structured research report, and provide an objective critique of its own output. 
 
 ## Features
 
@@ -8,12 +8,12 @@ ResearchMind is an advanced, multi-agent AI research assistant built with Stream
 - **Reader Agent**: Autonomously selects the most relevant URL from the search results and scrapes its text content.
 - **Specialized Writer**: Processes all gathered context to draft a professional, well-structured research report in Markdown.
 - **Report Critic**: Evaluates the drafted report for quality, accuracy, and depth, providing a score and actionable feedback.
-- **Session Management**: Automatically saves progress and research history into a local SQLite database. Includes safe deletion with confirmation dialogs.
+- **Session Management**: Automatically saves progress and research history into a local SQLite database. Includes safe deletion with confirmation dialogs, as well as the ability to seamlessly **Resume**, **Restart**, or start a **New Research** task from existing sessions.
 - **Advanced Export Capabilities**: Download final reports natively as high-quality Word Documents (`.docx`) or Markdown (`.md`) files.
-- **Modern UI**: A sleek, custom-styled interface built entirely using Streamlit, featuring responsive design, dynamic layout adjustments for perfect vertical alignments, and polished micro-animations.
+- **Modern UI & Streaming**: A sleek, custom-styled interface built entirely using Streamlit, featuring responsive design, custom button styling, and polished micro-animations. Agent responses now feature a **typewriter streaming effect** for an engaging, real-time user experience.
 - **Strict Formatting Guardrails**: Built-in prompt engineering explicitly enforces strict Markdown and LaTeX rules, preventing Streamlit rendering bugs when generating tables or complex math equations.
 - **Iterative Self-Correction**: Features an autonomous re-evaluation loop where the Report Critic can reject a draft and send feedback back to the Writer Agent for up to 3 iterative revisions.
-- **Distributed Multi-Model AI Pipeline**: Intelligently routes tasks across specialized LLMs (e.g. `gpt-oss-120b`, `llama-3.3-70b-versatile`, and `gpt-oss-20b`) to balance load and preserve high-tier API quota. It utilizes fail-fast fallback logic to gracefully handle rate limits and capacity constraints without freezing the UI.
+- **Robust Multi-Model Architecture**: Intelligently routes tasks across specialized Groq LLMs (e.g., `gpt-oss-120b`, `gpt-oss-20b`) with built-in fail-fast fallbacks to Google Gemini models (`gemini-2.5-flash`, `gemini-3.5-flash`). This ensures high stability, preserves API quota, and gracefully handles rate limits without freezing the UI.
 ## Architecture & Workflow
 
 The architecture follows a linear, four-step pipeline managed through Streamlit's session state.
@@ -28,7 +28,7 @@ flowchart TD
     
     User([👤 User]) -->|Enters Research Topic| UI{💻 Streamlit UI}
     
-    subgraph MultiAgentPipeline[Autonomous<br/>Research Pipeline]
+    subgraph MultiAgentPipeline[Autonomous Research Pipeline]
         direction TB
         
         Search[🔍 1. Search Agent] 
@@ -40,7 +40,7 @@ flowchart TD
         Reader ==>|Scraped Raw Data| Writer
         Writer ==>|Generates Draft| Critic
         
-        Critic -.->|❌ Fails: Iterative Feedback Loop| Writer
+        Critic -.->|❌ Fails: Iterative</br>Feedback Loop| Writer
     end
     
     UI ==>|Triggers Execution| Search
@@ -75,6 +75,7 @@ flowchart TD
 
 - Python 3.10+
 - An API key for [Groq](https://console.groq.com/)
+- An API key for [Google Gemini](https://aistudio.google.com/)
 - An API key for [Tavily](https://tavily.com/)
 
 ### Setup
@@ -89,6 +90,7 @@ flowchart TD
    Create a `.env` file in the root directory and add your keys:
    ```env
    GROQ_API_KEY=your_groq_api_key_here
+   GOOGLE_API_KEY=your_google_api_key_here
    TAVILY_API_KEY=your_tavily_api_key_here
    ```
 4. **Run the application:**

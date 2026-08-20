@@ -1,10 +1,7 @@
-# pyrefly: ignore [missing-import]
 import streamlit as st
 import time
 import uuid
-# pyrefly: ignore [missing-import]
 from agents import build_reader_agent, build_search_agent, writer_chain, critic_chain
-# pyrefly: ignore [missing-import]
 from storage import init_db, save_session, get_all_sessions, delete_session
 
 # Initialize database
@@ -155,7 +152,7 @@ header[data-testid="stHeader"] { background: transparent !important; }
     margin-bottom: 0.4rem !important;
 }
 
-/*  Run button  */
+/*  Run button (Primary)  */
 .stButton > button[kind="primary"] {
     background: linear-gradient(135deg, #ff9040 0%, #ff4d1a 100%) !important;
     color: #080810 !important;
@@ -163,7 +160,7 @@ header[data-testid="stHeader"] { background: transparent !important; }
     font-weight: 700 !important;
     font-size: 0.92rem !important;
     letter-spacing: 0.03em !important;
-    border: none !important;
+    border: 1px solid transparent !important;
     border-radius: 12px !important;
     padding: 0.8rem 2rem !important;
     cursor: pointer !important;
@@ -177,6 +174,40 @@ header[data-testid="stHeader"] { background: transparent !important; }
     box-shadow: 0 8px 32px rgba(255,120,40,0.5), 0 1px 0 rgba(255,255,255,0.15) inset !important;
 }
 .stButton > button[kind="primary"]:active { transform: translateY(0px) !important; }
+
+/* Secondary Button (Restart, Cancel, etc.) - Excluding sidebar */
+.block-container .stButton > button[kind="secondary"],
+[data-testid="stModal"] .stButton > button[kind="secondary"],
+[data-testid="stDialog"] .stButton > button[kind="secondary"],
+[role="dialog"] .stButton > button[kind="secondary"] {
+    background: rgba(255, 255, 255, 0.05) !important;
+    color: #f0ebe0 !important;
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 0.92rem !important;
+    letter-spacing: 0.03em !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 12px !important;
+    padding: 0.8rem 2rem !important;
+    cursor: pointer !important;
+    width: 100% !important;
+    transition: background 0.18s ease, transform 0.18s ease !important;
+    margin-top: 0.5rem !important;
+}
+.block-container .stButton > button[kind="secondary"]:hover,
+[data-testid="stModal"] .stButton > button[kind="secondary"]:hover,
+[data-testid="stDialog"] .stButton > button[kind="secondary"]:hover,
+[role="dialog"] .stButton > button[kind="secondary"]:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
+    transform: translateY(-2px) !important;
+}
+.block-container .stButton > button[kind="secondary"]:active,
+[data-testid="stModal"] .stButton > button[kind="secondary"]:active,
+[data-testid="stDialog"] .stButton > button[kind="secondary"]:active,
+[role="dialog"] .stButton > button[kind="secondary"]:active { 
+    transform: translateY(0px) !important; 
+}
 
 /* Small delete buttons in the sidebar - always red */
 [data-testid="stSidebar"] [data-testid="stHorizontalBlock"] > div:last-child button {
@@ -456,11 +487,11 @@ header[data-testid="stHeader"] { background: transparent !important; }
 
 # Session state & Sidebar UI
 
-for key in ("results", "running", "done", "error_step", "error_msg", "revision_count", "eval_msg"):
+for key in ("results", "running", "done", "error_step", "error_msg", "revision_count", "eval_msg", "writer_streamed", "critic_streamed"):
     if key not in st.session_state:
         if key == "results":
             st.session_state[key] = {}
-        elif key in ["running", "done"]:
+        elif key in ["running", "done", "writer_streamed", "critic_streamed"]:
             st.session_state[key] = False
         elif key == "revision_count":
             st.session_state[key] = 0
@@ -488,6 +519,8 @@ def confirm_delete_dialog(sess_id):
             st.session_state.topic_input = ""
             st.session_state.revision_count = 0
             st.session_state.eval_msg = None
+            st.session_state.writer_streamed = False
+            st.session_state.critic_streamed = False
         st.rerun()
     if col2.button("Cancel", use_container_width=True):
         st.rerun()
@@ -505,6 +538,8 @@ with st.sidebar:
         st.session_state.topic_input = ""
         st.session_state.revision_count = 0
         st.session_state.eval_msg = None
+        st.session_state.writer_streamed = False
+        st.session_state.critic_streamed = False
         st.rerun()
     
     st.markdown("<hr style='border-color: rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
@@ -528,11 +563,13 @@ with st.sidebar:
                     st.session_state.topic_input = sess["topic"]
                     st.session_state.results = sess["results"]
                     st.session_state.running = False
-                    st.session_state.done = True
+                    st.session_state.done = "critic" in sess["results"]
                     st.session_state.error_step = None
                     st.session_state.error_msg = None
                     st.session_state.revision_count = sess["results"].get("revision_count", 0)
                     st.session_state.eval_msg = sess["results"].get("eval_msg", None)
+                    st.session_state.writer_streamed = True
+                    st.session_state.critic_streamed = True
                     st.rerun()
             with c2:
                 if st.button("🗑️", key=f"del_{sess['id']}", use_container_width=True):
@@ -619,7 +656,28 @@ with col_left:
         key="topic_input",
         label_visibility="visible",
     )
-    run_btn = st.button("💬 Run Research", type="primary", use_container_width=True)
+    
+    has_results = bool(st.session_state.results)
+    is_done = st.session_state.get("done", False)
+    
+    resume_btn = False
+    restart_btn = False
+    run_btn = False
+    
+    if has_results and not is_done:
+        c_btn1, c_btn2 = st.columns(2)
+        with c_btn1:
+            resume_btn = st.button("▶️ Resume Research", type="primary", use_container_width=True)
+        with c_btn2:
+            restart_btn = st.button("🔄 Restart", use_container_width=True)
+    elif has_results and is_done:
+        c_btn1, c_btn2 = st.columns(2)
+        with c_btn1:
+            run_btn = st.button("✨ New Research", type="primary", use_container_width=True)
+        with c_btn2:
+            restart_btn = st.button("🔄 Restart", use_container_width=True)
+    else:
+        run_btn = st.button("💬 Run Research", type="primary", use_container_width=True)
 
     st.markdown("""
     <div class="example-topics">
@@ -660,11 +718,25 @@ with col_right:
 
 # TRIGGER
 
-if run_btn:
+if run_btn or resume_btn or restart_btn:
     if not topic.strip():
         st.warning("⚠️  Please enter a research topic first.")
     else:
-        st.session_state.results = {}
+        if restart_btn or (run_btn and has_results and is_done):
+            st.session_state.results = {}
+            st.session_state.revision_count = 0
+            st.session_state.eval_msg = None
+            st.session_state.writer_streamed = False
+            st.session_state.critic_streamed = False
+            if run_btn and is_done:
+                st.session_state.session_id = str(uuid.uuid4())
+        elif run_btn and not has_results:
+            st.session_state.results = {}
+            st.session_state.revision_count = 0
+            st.session_state.eval_msg = None
+            st.session_state.writer_streamed = False
+            st.session_state.critic_streamed = False
+            
         st.session_state.running = True
         st.session_state.done    = False
         st.session_state.error_step = None
@@ -748,7 +820,7 @@ if st.session_state.running and not st.session_state.done:
             })
             
             import re
-            match = re.search(r"Score:\s*([\d\.]+)", critic_result)
+            match = re.search(r"Score:.*?([\d\.]+)", critic_result)
             score = 10
             if match:
                 try:
@@ -763,6 +835,8 @@ if st.session_state.running and not st.session_state.done:
                 
                 # Rerun writer
                 del results["writer"]
+                st.session_state.writer_streamed = False
+                st.session_state.critic_streamed = False
                 
                 results["revision_count"] = st.session_state.revision_count
                 results["eval_msg"] = st.session_state.eval_msg
@@ -806,6 +880,12 @@ if st.session_state.running and not st.session_state.done:
 
 # Result Display
 
+def typewriter_stream(text, speed=0.015):
+    chunk_size = 2
+    for i in range(0, len(text), chunk_size):
+        yield text[i:i+chunk_size]
+        time.sleep(speed)
+
 if st.session_state.get("error_msg"):
     st.markdown('<div class="hr-glow"></div>', unsafe_allow_html=True)
     if st.session_state.error_msg == "rate_limit":
@@ -838,7 +918,11 @@ if r:
             '<div class="report-header"><div class="report-header-label">📝 Final Research Report</div></div>',
             unsafe_allow_html=True,
         )
-        st.markdown(r["writer"])
+        if not st.session_state.get("writer_streamed", False):
+            st.write_stream(typewriter_stream(r["writer"]))
+            st.session_state.writer_streamed = True
+        else:
+            st.markdown(r["writer"])
 
         dl_col1, dl_col2 = st.columns(2)
         with dl_col1:
@@ -887,4 +971,8 @@ if r:
             '<div class="critic-header"><div class="critic-header-label">🧐 Critic Review &amp; Score</div></div>',
             unsafe_allow_html=True,
         )
-        st.markdown(r["critic"])
+        if not st.session_state.get("critic_streamed", False):
+            st.write_stream(typewriter_stream(r["critic"]))
+            st.session_state.critic_streamed = True
+        else:
+            st.markdown(r["critic"])

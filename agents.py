@@ -1,16 +1,11 @@
-# pyrefly: ignore [missing-import]
 from langchain.agents import create_agent
-# pyrefly: ignore [missing-import]
 from langchain_openai import ChatOpenAI
-# pyrefly: ignore [missing-import]
 from langchain_core.prompts import ChatPromptTemplate
-# pyrefly: ignore [missing-import]
 from langchain_core.output_parsers import StrOutputParser
-# pyrefly: ignore [missing-import]
 from tools import web_search , scrape_url 
-# pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
 import os
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 load_dotenv()
 
@@ -25,15 +20,24 @@ def create_model(model_name: str) -> ChatOpenAI:
         max_retries = 0
     )
 
-llm_llama_70b = create_model("llama-3.3-70b-versatile")
+def create_gemini_model(model_name: str) -> ChatGoogleGenerativeAI:
+    return ChatGoogleGenerativeAI(
+        model = model_name,
+        google_api_key = os.getenv("GOOGLE_API_KEY"),
+        temperature = 0,
+        max_retries = 0
+    )
+
 llm_gpt_20b = create_model("openai/gpt-oss-20b")
 llm_gpt_120b = create_model("openai/gpt-oss-120b")
+llm_first_gemini = create_gemini_model("gemini-2.5-flash")
+llm_second_gemini = create_gemini_model("gemini-3.5-flash")
 
 # Set up specific LLMs for their roles with fallbacks to ensure stability
-llm_search = llm_gpt_20b.with_fallbacks([llm_llama_70b])
-llm_reader = llm_gpt_20b.with_fallbacks([llm_llama_70b])
+llm_search = llm_gpt_20b.with_fallbacks([llm_first_gemini , llm_second_gemini])
+llm_reader = llm_gpt_20b.with_fallbacks([llm_first_gemini , llm_second_gemini])
 llm_writer = llm_gpt_120b.with_fallbacks([llm_gpt_20b])
-llm_critic = llm_gpt_120b.with_fallbacks([llm_llama_70b])
+llm_critic = llm_gpt_120b.with_fallbacks([llm_gpt_20b])
 
 
 # ********************************** Creating the Agents Required ************************************
@@ -72,11 +76,11 @@ Structure the report as:
 - Introduction
 - Key Findings (minimum 4 well-explained points. Use tables ONLY when the data is strictly in a tabular format and would be distorted or hard to understand if presented without a table.)
 - Conclusion
-- Sources (list all URLs found in the research in bulleted format and must be clickable)
+- Sources (MANDATORY: list all sources and URLs found in the research in bulleted format. Every source must be a clickable markdown link)
 
 Be detailed, factual and professional.
 IMPORTANT FORMATTING RULES - YOU MUST FOLLOW THESE STRICTLY:
-1. CLEAN TEXT: Do NOT include any external citation markers, search snippets, brackets, or literals like 【1†source】 in your output. Clean all such artifacts from the text.
+1. CITATIONS AND LINKS: You MUST explicitly mention the source of your information to prevent false info. Convert any raw external citation markers, search snippets, brackets, or literals like 【1†source】 into proper inline clickable Markdown links. Clickable links and source mentions are MANDATORY.
 2. MATH & SYMBOLS: You MUST format all mathematical formulas, equations, variables, and scientific symbols using proper LaTeX. 
    - INLINE: For math within a sentence, use a single `$` (e.g., $E=mc^2$). 
    - BLOCK: For standalone equations, use double `$$`. You MUST place `$$` block math on its own separate new line with empty lines above and below it. NEVER place `$$` in the middle of a text line. 
