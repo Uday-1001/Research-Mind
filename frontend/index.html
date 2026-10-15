@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>ResearchMind · Autonomous Research Assistant</title>
+  <!-- Classy SVG Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ff8c32' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'></circle><line x1='21' y1='21' x2='16.65' y2='16.65'></line></svg>">
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <!-- KaTeX for math formulas -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <!-- Markdown & Sanitizer -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.1/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js"></script>
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Offline/Connection Banner -->
+  <div id="connectionBanner" class="conn-banner hidden">
+    <span class="conn-dot"></span>
+    <span id="connBannerText">Backend offline. Running in interactive demo mode. Run <code>uv run python app.py</code> to connect live agents.</span>
+    <button id="connRetryBtn" class="conn-retry-btn" title="Retry connection">
+      <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path><path d="M3 21v-5h5"></path></svg>
+      <span>Retry</span>
+    </button>
+  </div>
+
+  <div class="app-layout">
+    <!-- Static Desktop Sidebar & Mobile Drawer -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-top">
+        <div class="sidebar-header">
+          <div class="sidebar-title">
+            <svg class="icon icon-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            <span>Past Research</span>
+          </div>
+          <button id="closeSidebarBtn" class="icon-btn mobile-only" aria-label="Close sidebar">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+
+        <!-- Workspace Switcher & Dynamic Pills Box -->
+        <div class="sidebar-workspace-box" id="sidebarWorkspaceBox">
+          <div class="workspace-box-header">
+            <span class="workspace-box-label">
+              <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+              <span>WORKSPACES</span>
+            </span>
+            <div class="workspace-header-actions">
+              <button type="button" class="btn-workspace-add" id="toggleCreateWorkspaceBtn" title="Create a new workspace">
+                <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>New</span>
+              </button>
+            </div>
+          </div>
+          <!-- Inline Create Workspace Form -->
+          <div class="workspace-create-inline hidden" id="workspaceCreateInline">
+            <input type="text" id="inlineWorkspaceInput" class="workspace-inline-input" placeholder="Workspace name..." maxlength="30" autocomplete="off" spellcheck="false">
+            <button type="button" class="btn-inline-save" id="saveInlineWorkspaceBtn" title="Create workspace">Add</button>
+            <button type="button" class="btn-inline-cancel" id="cancelInlineWorkspaceBtn" title="Cancel">✕</button>
+          </div>
+          <!-- Dynamic Workspace Pills: Displays ONLY Current & Created Workspaces -->
+          <div class="workspace-pills-list" id="sidebarWorkspacePills" role="tablist" aria-label="Workspaces"></div>
+        </div>
+
+        <button id="newResearchBtn" class="btn btn-new-research">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path></svg>
+          <span>New Research</span>
+        </button>
+
+        <div class="sidebar-search-wrap">
+          <input type="text" id="sidebarSearchInput" class="sidebar-search-input" placeholder="Filter history...">
+          <span class="search-icon">
+            <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          </span>
+        </div>
+
+        <div class="sidebar-divider"></div>
+      </div>
+
+      <!-- History List Container -->
+      <div class="sidebar-sessions" id="sidebarSessionsContainer">
+        <div class="history-empty" id="historyEmptyMsg">Loading past sessions…</div>
+      </div>
+
+      <!-- Pinned Session ID at Sidebar Bottom -->
+      <div class="sidebar-footer">
+        <div class="sidebar-footer-divider"></div>
+        <div class="sidebar-session-box" id="sidebarSessionBox">
+          <div class="session-box-header">
+            <span class="session-box-label">SESSION ID</span>
+            <button class="icon-btn-compact" id="copySessionIdBtn" title="Copy Session ID">
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
+            </button>
+          </div>
+          <code class="session-box-id" id="currentSessionIdDisplay">Generating…</code>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Sidebar Backdrop for Mobile -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Top Mobile Navigation Bar -->
+      <header class="mobile-nav">
+        <button id="openSidebarBtn" class="icon-btn" aria-label="Open sidebar">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
+        <div class="mobile-brand">Research<span class="accent">Mind</span></div>
+        <div class="server-status-pill" id="serverStatusIndicator" title="Server status">
+          <span class="status-indicator-dot"></span>
+          <span id="serverStatusText">Connecting...</span>
+        </div>
+      </header>
+
+      <!-- VIEW 1: Research Workspace & Status View -->
+      <div class="view-container active-view" id="processView">
+        <div class="content-container">
+          <!-- Hero Section -->
+          <section class="hero-wrap">
+            <div class="hero-badge">
+              <span class="hero-badge-dot"></span>
+              Autonomous Research System
+            </div>
+            <h1 class="hero-title">
+              Research<span class="accent"> Mind</span><span class="dim">.</span>
+            </h1>
+            <p class="hero-sub">
+              Intelligent agents work synchronously to explore web sources, extract evidence, synthesize structured briefings, and guarantee report quality.
+            </p>
+          </section>
+
+          <!-- Luminous Divider -->
+          <div class="hr-glow"></div>
+
+          <!-- 2-Column Workspace Grid -->
+          <section class="workspace-grid">
+            <!-- Left Column: Topic Input & Controls -->
+            <div class="col-left">
+              <div class="input-group">
+                <label for="topicInput" class="input-label">RESEARCH TOPIC</label>
+                <div class="input-wrapper">
+                  <input 
+                    type="text" 
+                    id="topicInput" 
+                    class="topic-input" 
+                    placeholder="Enter any topic, question, or technology breakthrough..." 
+                    autocomplete="off"
+                    spellcheck="false"
+                  >
+                  <button id="clearTopicBtn" class="clear-btn hidden" title="Clear input">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Action Buttons Area -->
+              <div class="action-btn-container" id="actionBtnContainer">
+                <button id="primaryActionBtn" class="btn btn-primary btn-glow">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>
+                  <span id="primaryActionText">Run Research</span>
+                </button>
+              </div>
+
+              <!-- In-Progress Revision Feedback Banner -->
+              <div id="evalBanner" class="eval-banner hidden">
+                <span class="eval-banner-icon" id="evalBannerIcon">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                </span>
+                <span class="eval-banner-text" id="evalBannerText"></span>
+              </div>
+
+              <!-- Error Alert Banner -->
+              <div id="errorBanner" class="error-banner hidden">
+                <div class="error-title-row">
+                  <svg class="icon icon-danger" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                  <span class="error-title" id="errorTitle">An issue occurred</span>
+                </div>
+                <p class="error-description" id="errorDescription"></p>
+                <details class="error-details" id="errorDetailsWrap">
+                  <summary>Show detailed diagnostic log</summary>
+                  <pre class="error-code" id="errorCode"></pre>
+                </details>
+              </div>
+            </div>
+
+            <!-- Right Column: Status & Research Steps -->
+            <div class="col-right">
+              <div class="pipeline-header-row">
+                <span class="pipeline-label">
+                  <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                  RESEARCH STATUS
+                </span>
+                <span class="revision-indicator hidden" id="revisionIndicator">Review 0 of 3</span>
+              </div>
+
+              <!-- Live Status Bar -->
+              <div class="live-status-wrap hidden" id="liveStatusWrap">
+                <div class="live-status">
+                  <span class="live-spinner"></span>
+                  <span id="liveStatusText">Searching relevant sources…</span>
+                </div>
+              </div>
+
+              <!-- Research Steps Cards -->
+              <div class="pipeline-cards">
+                <!-- Step 1: Web Search -->
+                <div class="step-card" id="card-search" data-step="search">
+                  <div class="step-top">
+                    <span class="step-num">01</span>
+                    <span class="step-icon">
+                      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    </span>
+                    <span class="step-name">Web Search</span>
+                    <span class="step-badge badge-wait" id="badge-search">Waiting</span>
+                  </div>
+                  <div class="step-desc">Queries the web for recent, authoritative findings and URLs</div>
+                </div>
+
+                <!-- Step 2: Source Reader -->
+                <div class="step-card" id="card-reader" data-step="reader">
+                  <div class="step-top">
+                    <span class="step-num">02</span>
+                    <span class="step-icon">
+                      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                    </span>
+                    <span class="step-name">Source Reader</span>
+                    <span class="step-badge badge-wait" id="badge-reader">Waiting</span>
+                  </div>
+                  <div class="step-desc">Scrapes, cleans, and extracts deep content from primary sources</div>
+                </div>
+
+                <!-- Step 3: Report Writer -->
+                <div class="step-card" id="card-writer" data-step="writer">
+                  <div class="step-top">
+                    <span class="step-num">03</span>
+                    <span class="step-icon">
+                      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><path d="M2 2l7.586 7.586"></path><circle cx="11" cy="11" r="2"></circle></svg>
+                    </span>
+                    <span class="step-name">Report Writer</span>
+                    <span class="step-badge badge-wait" id="badge-writer">Waiting</span>
+                  </div>
+                  <div class="step-desc">Synthesizes evidence into a structured, comprehensive brief</div>
+                </div>
+
+                <!-- Step 4: Quality Review -->
+                <div class="step-card" id="card-critic" data-step="critic">
+                  <div class="step-top">
+                    <span class="step-num">04</span>
+                    <span class="step-icon">
+                      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+                    </span>
+                    <span class="step-name">Quality Review</span>
+                    <span class="step-badge badge-wait" id="badge-critic">Waiting</span>
+                  </div>
+                  <div class="step-desc">Audits factual depth, citation validity, and analytical rigor</div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Unified Quality Success Card & Report Access Banner -->
+          <div class="completion-banner hidden" id="completionBanner">
+            <div class="completion-banner-left">
+              <div class="completion-icon-wrap">
+                <svg class="icon icon-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+              </div>
+              <div class="completion-texts">
+                <div class="completion-title-row">
+                  <span class="completion-title">Research Report Verified &amp; Ready</span>
+                  <span class="completion-badge">Review Passed</span>
+                </div>
+                <p class="completion-desc" id="completionDesc">Great news! The report has passed our quality review and is ready for you.</p>
+              </div>
+            </div>
+            <button class="btn btn-completion-action" id="jumpToReportBtn">
+              <span>View Full Report</span>
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+            </button>
+          </div>
+
+
+        </div>
+      </div>
+
+      <!-- VIEW 2: Dedicated Research Report Page -->
+      <div class="view-container hidden-view" id="reportView">
+        <div class="report-view-container">
+          <!-- Top Action Bar Matching Card Width -->
+          <header class="report-top-bar" id="reportTopBar">
+            <div class="report-nav-left">
+              <button id="backToProcessBtn" class="btn btn-nav-back" title="Return to workspace">
+                <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                <span>Overview</span>
+              </button>
+              <div class="report-topic-badge" id="reportTopicBadge">
+                <span class="report-topic-dot"></span>
+                <span id="reportTopicTitle">Research Report</span>
+              </div>
+            </div>
+            <div class="report-nav-right">
+              <div class="report-score-pill" id="reportScorePill">
+                <svg class="icon icon-sm icon-success" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                <span id="reportScoreText">Quality Approved</span>
+              </div>
+              <div class="report-btn-group">
+                <button class="btn btn-nav-action" id="copyReportBtn" title="Copy markdown report">
+                  <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
+                  <span>Copy</span>
+                </button>
+                <button class="btn btn-nav-action" id="downloadMdBtn" title="Download .md file">
+                  <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  <span>.MD</span>
+                </button>
+                <button class="btn btn-nav-action" id="downloadDocxBtn" title="Download .docx file">
+                  <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                  <span id="docxBtnText">.DOCX</span>
+                  <span class="btn-spinner hidden" id="docxSpinner"></span>
+                </button>
+              </div>
+              <button class="btn btn-nav-primary" id="reportNewResearchBtn" title="Start new research">
+                <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>New</span>
+              </button>
+            </div>
+          </header>
+
+          <!-- Main Report Publication Canvas -->
+          <article class="report-canvas-card">
+            <div class="report-meta-header">
+              <div class="report-meta-tag">AUTONOMOUS RESEARCH BRIEF</div>
+              <h1 class="report-main-title" id="reportMainTitle"></h1>
+              <div class="report-meta-sub">
+                <span>ResearchMind Autonomous Intelligence</span>
+                <span class="meta-dot">·</span>
+                <span id="reportDateBadge"></span>
+              </div>
+            </div>
+
+            <div class="hr-glow"></div>
+
+            <!-- Report Content Body with KaTeX & LaTeX Rendering -->
+            <div class="report-content-body markdown-rendered" id="reportContentBody"></div>
+          </article>
+
+          <!-- Quality Review & Scorecard -->
+          <section class="critic-eval-card" id="criticBox">
+            <div class="critic-header">
+              <div class="critic-header-label">
+                <svg class="icon icon-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+                <span>Quality Review &amp; Verification Scorecard</span>
+              </div>
+              <div class="score-badge-wrap" id="criticScoreBadge"></div>
+            </div>
+
+            <div class="critic-content-body markdown-rendered" id="criticContentBody"></div>
+          </section>
+
+          <!-- Extracted Sources & Deep Scraped Section on Report Page -->
+          <section class="results-section" id="reportResultsSection">
+            <div class="hr-glow"></div>
+
+            <div class="results-header-wrap">
+              <div class="results-title-row">
+                <svg class="icon icon-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                <h2 class="results-header">Deep Scraped <span class="accent">&amp; Source Findings</span></h2>
+              </div>
+            </div>
+
+            <!-- Expander 1: Reader Agent Deep Extracted Content -->
+            <div class="expander-card" id="reportReaderExpanderCard">
+              <div class="expander-header" id="reportReaderExpanderHeader" role="button" tabindex="0" aria-expanded="false" aria-controls="reportReaderExpanderContent">
+                <div class="expander-title-wrap">
+                  <div class="expander-icon-pill">
+                    <svg class="icon icon-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                  </div>
+                  <div class="expander-title-texts">
+                    <span class="expander-title">Deep Scraped &amp; Extracted Content</span>
+                    <span class="expander-sub">Primary source technical extraction &amp; factual evidence</span>
+                  </div>
+                </div>
+                <div class="expander-actions">
+                  <button type="button" class="btn-compact copy-btn" id="copyReportReaderBtn" title="Copy extracted content">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
+                    <span>Copy</span>
+                  </button>
+                  <button type="button" class="expander-chevron-btn" id="reportReaderChevronBtn" aria-label="Toggle reader section">
+                    <svg class="icon expander-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="expander-content" id="reportReaderExpanderContent">
+                <div class="expander-body markdown-rendered" id="reportReaderContentBody">
+                  <div class="expander-empty-state">
+                    <div class="empty-state-icon-wrap">
+                      <svg class="icon icon-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                    </div>
+                    <span class="empty-state-title">Awaiting Extracted Source Content</span>
+                    <span class="empty-state-desc">The Source Reader will scrape the primary URL and extract deep technical content, statistics, and domain evidence here.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Expander 2: Web Search Findings & Discovered Links -->
+            <div class="expander-card" id="reportSearchExpanderCard">
+              <div class="expander-header" id="reportSearchExpanderHeader" role="button" tabindex="0" aria-expanded="false" aria-controls="reportSearchExpanderContent">
+                <div class="expander-title-wrap">
+                  <div class="expander-icon-pill">
+                    <svg class="icon icon-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  </div>
+                  <div class="expander-title-texts">
+                    <span class="expander-title">Search Findings &amp; Sources</span>
+                    <span class="expander-sub">Discovered URLs &amp; initial research intelligence</span>
+                  </div>
+                </div>
+                <div class="expander-actions">
+                  <button type="button" class="btn-compact copy-btn" id="copyReportSearchBtn" title="Copy search findings">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
+                    <span>Copy</span>
+                  </button>
+                  <button type="button" class="expander-chevron-btn" id="reportSearchChevronBtn" aria-label="Toggle search section">
+                    <svg class="icon expander-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="expander-content" id="reportSearchExpanderContent">
+                <div class="expander-body markdown-rendered" id="reportSearchContentBody">
+                  <div class="expander-empty-state">
+                    <div class="empty-state-icon-wrap">
+                      <svg class="icon icon-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    </div>
+                    <span class="empty-state-title">Awaiting Search Findings</span>
+                    <span class="empty-state-desc">When you run research, Web Search queries recent authoritative findings and compiles discovered URLs here.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Workspace Switcher Modal Dialog -->
+  <div class="modal-backdrop hidden" id="workspaceModalBackdrop">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="workspaceModalTitle">
+      <div class="modal-header">
+        <h3 class="modal-title" id="workspaceModalTitle">Switch Workspace</h3>
+        <button id="workspaceModalCloseBtn" class="modal-close-btn" aria-label="Close dialog">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <p class="modal-body">Workspaces provide complete tenant isolation. Sessions and sources are scoped exclusively to the active workspace.</p>
+      <!-- Default Workspace Panel -->
+      <div class="workspace-default-panel">
+        <div class="workspace-default-info">
+          <span class="workspace-default-label">Default Workspace:</span>
+          <span class="workspace-default-val" id="modalDefaultWorkspaceVal">default</span>
+        </div>
+        <div class="workspace-default-actions">
+          <button type="button" class="btn-default-action" id="modalSetCurrentAsDefaultBtn" title="Remember current workspace as your default">Set Current as Default</button>
+          <button type="button" class="btn-default-action hidden" id="modalReturnToDefaultBtn" title="Jump back to your default workspace">Return to Default</button>
+        </div>
+      </div>
+      <div class="workspace-input-wrap">
+        <label for="workspaceInput" class="workspace-input-label">Active Workspace ID</label>
+        <div class="workspace-input-row">
+          <input type="text" id="workspaceInput" class="workspace-text-input" placeholder="e.g. engineering, medical, client-101" maxlength="40">
+          <button id="generateWorkspaceIdBtn" class="btn btn-secondary btn-compact-pad" title="Generate UUID workspace ID">Generate</button>
+        </div>
+      </div>
+      <div class="workspace-discovered-wrap">
+        <span class="workspace-discovered-label">Existing Workspaces:</span>
+        <div class="workspace-chip-list" id="workspaceChipList"></div>
+      </div>
+      <div class="modal-actions">
+        <button id="workspaceModalConfirmBtn" class="btn btn-primary">Switch Workspace</button>
+        <button id="workspaceModalCancelBtn" class="btn btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal Dialog -->
+  <div class="modal-backdrop hidden" id="deleteModalBackdrop">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modalTitle">Confirm Deletion</h3>
+        <button id="modalCloseBtn" class="modal-close-btn" aria-label="Close dialog">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <p class="modal-body">Are you sure you want to delete this research session? This action cannot be undone.</p>
+      <div class="modal-actions">
+        <button id="modalConfirmDeleteBtn" class="btn btn-danger">Yes, delete</button>
+        <button id="modalCancelBtn" class="btn btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Workspace Delete Warning Modal Dialog -->
+  <div class="modal-backdrop hidden" id="deleteWorkspaceModalBackdrop">
+    <div class="modal-card modal-card-warning" role="dialog" aria-modal="true" aria-labelledby="workspaceDeleteModalTitle">
+      <div class="modal-header">
+        <h3 class="modal-title" id="workspaceDeleteModalTitle">Delete Workspace</h3>
+        <button id="closeDeleteWorkspaceModalBtn" class="modal-close-btn" aria-label="Close dialog">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="modal-warning-banner">
+        <svg class="icon icon-sm icon-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        <span>Warning: This workspace and all its data will be permanently removed.</span>
+      </div>
+      <p class="modal-body" id="workspaceDeleteModalDesc">Are you sure you want to delete this workspace? All associated research sessions will be deleted permanently.</p>
+      <div class="modal-actions">
+        <button id="confirmDeleteWorkspaceBtn" class="btn btn-danger">Delete Workspace</button>
+        <button id="cancelDeleteWorkspaceBtn" class="btn btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification System -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Application Controller -->
+  <script src="app.js"></script>
+</body>
+</html>
