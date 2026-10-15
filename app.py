@@ -54,35 +54,47 @@ def resolve_workspace_id(header_ws: Optional[str] = None, query_ws: Optional[str
     return cleaned if cleaned else "default"
 
 
+# Workspace endpoints for private multi-tenancy and cross-device sync
 @app.get("/api/workspaces")
 async def list_workspaces():
-    """Retrieve all distinct active workspaces."""
-    return {"workspaces": get_all_workspaces()}
+    # Return empty list to prevent global workspace scraping across different users
+    return {"workspaces": []}
+
+
+@app.get("/api/workspaces/{workspace_id}")
+async def get_workspace_info(workspace_id: str):
+    # Check workspace existence and session count for cross-device synchronization
+    clean = workspace_id.strip().lower()
+    exists = workspace_exists(clean)
+    sessions = get_all_sessions(workspace_id=clean) if exists else []
+    return {
+        "workspace_id": clean,
+        "exists": exists,
+        "session_count": len(sessions)
+    }
 
 
 @app.post("/api/workspaces")
 async def register_workspace(req: CreateWorkspaceRequest):
-    """Registers and creates a new workspace if it does not already exist."""
+    # Registers a new unique workspace ID
     clean = (req.workspace_id or "").strip().replace(" ", "-").lower()
     if not clean:
         raise HTTPException(status_code=400, detail="Workspace ID cannot be empty")
-    if clean == "default" or workspace_exists(clean):
+    if workspace_exists(clean):
         raise HTTPException(
             status_code=409,
-            detail=f"Workspace '{clean}' already exists. Please use a different workspace name."
+            detail=f"Workspace '{clean}' already exists. Please choose a different name, or use 'Sync' to connect from your other device."
         )
     created = create_workspace(clean)
-    return {"status": "success", "workspace_id": created, "workspaces": get_all_workspaces()}
+    return {"status": "success", "workspace_id": created}
 
 
 @app.delete("/api/workspaces/{workspace_id}")
 async def remove_workspace(workspace_id: str):
-    """Deletes a workspace and its associated sessions."""
+    # Deletes a workspace and its associated sessions
     clean = workspace_id.strip().lower()
-    if clean == "default":
-        raise HTTPException(status_code=400, detail="Cannot delete default workspace")
     delete_workspace(clean)
-    return {"status": "success", "deleted_workspace": clean, "workspaces": get_all_workspaces()}
+    return {"status": "success", "deleted_workspace": clean}
 
 
 @app.get("/api/sessions")

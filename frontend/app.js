@@ -6,19 +6,32 @@
   // API Configuration & Base URL
   const API_BASE = window.location.origin.includes('http') ? window.location.origin : 'http://localhost:8000';
 
-  // Default Workspace Persistence Helper
+  // Generate unique tenant workspace ID for multi-tenant isolation
+  function generateTenantId() {
+    const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+    let rand = '';
+    for (let i = 0; i < 6; i++) {
+      rand += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return `ws-${rand}`;
+  }
+
+  // Default Workspace Persistence Helper: gives every user their own isolated workspace
   function getStoredDefaultWorkspace() {
     try {
       const stored = localStorage.getItem('rm_default_workspace');
-      if (stored && stored.trim()) return stored.trim().toLowerCase();
-      localStorage.setItem('rm_default_workspace', 'default');
-      return 'default';
+      if (stored && stored.trim() && stored.trim().toLowerCase() !== 'default') {
+        return stored.trim().toLowerCase();
+      }
+      const newWs = generateTenantId();
+      localStorage.setItem('rm_default_workspace', newWs);
+      return newWs;
     } catch (e) {
-      return 'default';
+      return generateTenantId();
     }
   }
 
-  // Workspace Persistence Helper
+  // Workspace Persistence Helper: supports direct URL param syncing
   function getInitialWorkspaceId() {
     try {
       const urlParams = new URLSearchParams(window.location.search);
@@ -29,10 +42,12 @@
         return clean;
       }
       const fromStorage = localStorage.getItem('rm_workspace_id');
-      if (fromStorage && fromStorage.trim()) return fromStorage.trim();
+      if (fromStorage && fromStorage.trim() && fromStorage.trim().toLowerCase() !== 'default') {
+        return fromStorage.trim().toLowerCase();
+      }
       return getStoredDefaultWorkspace();
     } catch (e) {
-      return 'default';
+      return getStoredDefaultWorkspace();
     }
   }
 
@@ -43,7 +58,7 @@
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
-          return parsed.map(w => String(w).trim().toLowerCase()).filter(Boolean);
+          return parsed.map(w => String(w).trim().toLowerCase()).filter(w => w && w !== 'default');
         }
       }
     } catch (e) {
@@ -52,17 +67,20 @@
     return [];
   }
 
+  // Initial workspace state scoped to this device
+  const initialDefaultWs = getStoredDefaultWorkspace();
+  const initialActiveWs = getInitialWorkspaceId();
+
   // Application State
   const state = {
-    defaultWorkspaceId: getStoredDefaultWorkspace(),
-    workspaceId: getInitialWorkspaceId(),
+    defaultWorkspaceId: initialDefaultWs,
+    workspaceId: initialActiveWs,
     createdWorkspaces: Array.from(new Set([
-      'default',
-      getStoredDefaultWorkspace(),
-      getInitialWorkspaceId(),
+      initialDefaultWs,
+      initialActiveWs,
       ...getStoredCreatedWorkspaces()
-    ])),
-    allWorkspaces: ['default'],
+    ])).filter(Boolean),
+    allWorkspaces: [initialActiveWs],
     sessionId: generateUUID(),
     topic: '',
     results: {},
@@ -106,11 +124,17 @@
 
     // Workspace Management & Dynamic Pills
     sidebarWorkspaceBox: document.getElementById('sidebarWorkspaceBox'),
+    copyWorkspaceSyncLinkBtn: document.getElementById('copyWorkspaceSyncLinkBtn'),
+    toggleSyncWorkspaceBtn: document.getElementById('toggleSyncWorkspaceBtn'),
     toggleCreateWorkspaceBtn: document.getElementById('toggleCreateWorkspaceBtn'),
     workspaceCreateInline: document.getElementById('workspaceCreateInline'),
     inlineWorkspaceInput: document.getElementById('inlineWorkspaceInput'),
     saveInlineWorkspaceBtn: document.getElementById('saveInlineWorkspaceBtn'),
     cancelInlineWorkspaceBtn: document.getElementById('cancelInlineWorkspaceBtn'),
+    workspaceSyncInline: document.getElementById('workspaceSyncInline'),
+    inlineSyncWorkspaceInput: document.getElementById('inlineSyncWorkspaceInput'),
+    saveInlineSyncWorkspaceBtn: document.getElementById('saveInlineSyncWorkspaceBtn'),
+    cancelInlineSyncWorkspaceBtn: document.getElementById('cancelInlineSyncWorkspaceBtn'),
     sidebarWorkspacePills: document.getElementById('sidebarWorkspacePills'),
     openWorkspaceModalBtn: document.getElementById('openWorkspaceModalBtn'),
     currentWorkspaceDisplay: document.getElementById('currentWorkspaceDisplay'),
@@ -119,11 +143,14 @@
     workspaceModalCloseBtn: document.getElementById('workspaceModalCloseBtn'),
     workspaceModalCancelBtn: document.getElementById('workspaceModalCancelBtn'),
     workspaceModalConfirmBtn: document.getElementById('workspaceModalConfirmBtn'),
+    modalActiveWorkspaceVal: document.getElementById('modalActiveWorkspaceVal'),
+    modalCopySyncLinkBtn: document.getElementById('modalCopySyncLinkBtn'),
+    modalCopyWorkspaceIdBtn: document.getElementById('modalCopyWorkspaceIdBtn'),
+    modalSyncWorkspaceBtn: document.getElementById('modalSyncWorkspaceBtn'),
     modalDefaultWorkspaceVal: document.getElementById('modalDefaultWorkspaceVal'),
     modalSetCurrentAsDefaultBtn: document.getElementById('modalSetCurrentAsDefaultBtn'),
     modalReturnToDefaultBtn: document.getElementById('modalReturnToDefaultBtn'),
     workspaceInput: document.getElementById('workspaceInput'),
-    generateWorkspaceIdBtn: document.getElementById('generateWorkspaceIdBtn'),
     workspaceChipList: document.getElementById('workspaceChipList'),
 
     // Input & Actions
@@ -606,6 +633,9 @@
     if (el.currentWorkspaceDisplay) {
       el.currentWorkspaceDisplay.textContent = state.workspaceId;
     }
+    if (el.modalActiveWorkspaceVal) {
+      el.modalActiveWorkspaceVal.textContent = state.workspaceId;
+    }
     if (el.modalDefaultWorkspaceVal) {
       el.modalDefaultWorkspaceVal.textContent = state.defaultWorkspaceId;
     }
@@ -619,6 +649,80 @@
     }
   }
 
+  // Copy shareable sync URL so users can access workspace on mobile or another computer
+  function copyWorkspaceSyncLink() {
+    const ws = state.workspaceId;
+    const url = `${window.location.origin}${window.location.pathname}?workspace=${encodeURIComponent(ws)}`;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(() => {
+        showToast(`Sync link copied! Open on mobile to load "${ws}"`, 'success', 3500);
+      }).catch(() => {
+        prompt('Copy your Workspace Sync URL:', url);
+      });
+    } else {
+      prompt('Copy your Workspace Sync URL:', url);
+    }
+  }
+
+  // Copy Workspace ID to clipboard
+  function copyWorkspaceIdOnly() {
+    const ws = state.workspaceId;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(ws).then(() => {
+        showToast(`Workspace ID "${ws}" copied to clipboard`, 'success');
+      }).catch(() => {
+        prompt('Copy your Workspace ID:', ws);
+      });
+    } else {
+      prompt('Copy your Workspace ID:', ws);
+    }
+  }
+
+  // Connect and sync an existing workspace ID from another device
+  async function syncExistingWorkspace(workspaceId) {
+    const clean = (workspaceId || '').trim().replace(/[^\w\-_]/g, '-').toLowerCase();
+    if (!clean) {
+      showToast('Please enter a valid Workspace ID', 'info');
+      return;
+    }
+
+    try {
+      // Check workspace existence on server
+      const res = await fetch(`${API_BASE}/api/workspaces/${encodeURIComponent(clean)}`);
+      let sessionCount = 0;
+      if (res.ok) {
+        const data = await res.json();
+        sessionCount = data.session_count || 0;
+      }
+
+      // Add to this device's private workspace list
+      if (!state.createdWorkspaces.includes(clean)) {
+        state.createdWorkspaces.push(clean);
+        saveCreatedWorkspaces();
+      }
+
+      // Close inline sync form if open
+      if (el.workspaceSyncInline) el.workspaceSyncInline.classList.add('hidden');
+      if (el.inlineSyncWorkspaceInput) {
+        el.inlineSyncWorkspaceInput.value = '';
+        el.inlineSyncWorkspaceInput.classList.remove('input-error');
+      }
+      closeWorkspaceModal();
+
+      // Switch and load sessions
+      switchWorkspace(clean);
+      showToast(`Workspace "${clean}" synced! (${sessionCount} research sessions loaded)`, 'success');
+    } catch (e) {
+      console.warn('Could not sync workspace:', e);
+      if (!state.createdWorkspaces.includes(clean)) {
+        state.createdWorkspaces.push(clean);
+        saveCreatedWorkspaces();
+      }
+      switchWorkspace(clean);
+      showToast(`Workspace "${clean}" connected`, 'info');
+    }
+  }
+
   async function createNewWorkspace(name) {
     const clean = (name || '').trim().replace(/[^\w\-_]/g, '-').toLowerCase();
     if (!clean) {
@@ -629,7 +733,7 @@
     // Check if workspace name is already taken locally
     const alreadyExistsLocally = state.createdWorkspaces.includes(clean) || clean === state.defaultWorkspaceId;
     if (alreadyExistsLocally) {
-      showToast(`Workspace "${clean}" already exists. Please use a different workspace name.`, 'danger');
+      showToast(`Workspace "${clean}" already exists. Please choose a different name, or click 'Sync' to connect.`, 'danger');
       if (el.inlineWorkspaceInput) {
         el.inlineWorkspaceInput.classList.add('input-error');
         el.inlineWorkspaceInput.focus();
@@ -668,6 +772,7 @@
         el.inlineWorkspaceInput.value = '';
         el.inlineWorkspaceInput.classList.remove('input-error');
       }
+      closeWorkspaceModal();
 
       switchWorkspace(clean);
       showToast(`Workspace "${clean}" created and activated`, 'success');
@@ -679,7 +784,7 @@
 
   // Workspace Deletion Warning & Confirmation Flow
   function requestDeleteWorkspace(ws) {
-    if (ws === 'default' || ws === state.defaultWorkspaceId) {
+    if (ws === state.defaultWorkspaceId) {
       showToast('Default workspace cannot be deleted', 'info');
       return;
     }
@@ -721,27 +826,8 @@
     showToast(`Workspace "${ws}" permanently deleted`, 'info');
   }
 
-  async function fetchServerWorkspaces() {
-    try {
-      const res = await fetch(`${API_BASE}/api/workspaces`);
-      if (res.ok) {
-        const data = await res.json();
-        const serverList = (data.workspaces || []).map(w => String(w).trim().toLowerCase()).filter(Boolean);
-        state.createdWorkspaces = Array.from(new Set([
-          state.defaultWorkspaceId,
-          ...state.createdWorkspaces,
-          ...serverList
-        ]));
-        saveCreatedWorkspaces();
-        updateWorkspaceUI();
-      }
-    } catch (e) {
-      console.warn('Could not fetch server workspaces:', e);
-    }
-  }
-
   function setDefaultWorkspace(targetWs) {
-    const clean = (targetWs || state.workspaceId || 'default').trim().replace(/[^\w\-_]/g, '-').toLowerCase() || 'default';
+    const clean = (targetWs || state.workspaceId).trim().replace(/[^\w\-_]/g, '-').toLowerCase();
     state.defaultWorkspaceId = clean;
     if (!state.createdWorkspaces.includes(clean)) {
       state.createdWorkspaces.push(clean);
@@ -757,28 +843,12 @@
     switchWorkspace(state.defaultWorkspaceId);
   }
 
-  async function openWorkspaceModal() {
+  function openWorkspaceModal() {
     if (!el.workspaceModalBackdrop) return;
     if (el.workspaceInput) el.workspaceInput.value = state.workspaceId;
     updateWorkspaceUI();
+    renderWorkspaceChips(state.createdWorkspaces);
     el.workspaceModalBackdrop.classList.remove('hidden');
-
-    try {
-      const res = await fetch(`${API_BASE}/api/workspaces`);
-      if (res.ok) {
-        const data = await res.json();
-        const serverList = (data.workspaces || []).map(w => String(w).trim().toLowerCase()).filter(Boolean);
-        state.createdWorkspaces = Array.from(new Set([
-          state.defaultWorkspaceId,
-          ...state.createdWorkspaces,
-          ...serverList
-        ]));
-        saveCreatedWorkspaces();
-        renderWorkspaceChips(state.createdWorkspaces);
-      }
-    } catch (e) {
-      console.warn('Could not fetch workspaces:', e);
-    }
 
     setTimeout(() => {
       if (el.workspaceInput) el.workspaceInput.focus();
@@ -1818,9 +1888,48 @@ Autonomous analysis confirms that **${topic}** is advancing towards scalable ent
       }
     });
 
-    // Workspace Pill Switcher & Inline Creation Events
+    // Workspace Pill Switcher, Share & Sync Events
+    if (el.copyWorkspaceSyncLinkBtn) {
+      el.copyWorkspaceSyncLinkBtn.addEventListener('click', copyWorkspaceSyncLink);
+    }
+    if (el.toggleSyncWorkspaceBtn) {
+      el.toggleSyncWorkspaceBtn.addEventListener('click', () => {
+        if (el.workspaceCreateInline) el.workspaceCreateInline.classList.add('hidden');
+        if (el.workspaceSyncInline) {
+          const isHidden = el.workspaceSyncInline.classList.toggle('hidden');
+          if (!isHidden && el.inlineSyncWorkspaceInput) {
+            el.inlineSyncWorkspaceInput.value = '';
+            el.inlineSyncWorkspaceInput.focus();
+          }
+        }
+      });
+    }
+    if (el.saveInlineSyncWorkspaceBtn) {
+      el.saveInlineSyncWorkspaceBtn.addEventListener('click', () => {
+        if (el.inlineSyncWorkspaceInput) syncExistingWorkspace(el.inlineSyncWorkspaceInput.value);
+      });
+    }
+    if (el.cancelInlineSyncWorkspaceBtn) {
+      el.cancelInlineSyncWorkspaceBtn.addEventListener('click', () => {
+        if (el.workspaceSyncInline) el.workspaceSyncInline.classList.add('hidden');
+      });
+    }
+    if (el.inlineSyncWorkspaceInput) {
+      el.inlineSyncWorkspaceInput.addEventListener('input', () => {
+        el.inlineSyncWorkspaceInput.classList.remove('input-error');
+      });
+      el.inlineSyncWorkspaceInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          syncExistingWorkspace(el.inlineSyncWorkspaceInput.value);
+        } else if (e.key === 'Escape') {
+          if (el.workspaceSyncInline) el.workspaceSyncInline.classList.add('hidden');
+        }
+      });
+    }
     if (el.toggleCreateWorkspaceBtn) {
       el.toggleCreateWorkspaceBtn.addEventListener('click', () => {
+        if (el.workspaceSyncInline) el.workspaceSyncInline.classList.add('hidden');
         if (el.workspaceCreateInline) {
           const isHidden = el.workspaceCreateInline.classList.toggle('hidden');
           if (!isHidden && el.inlineWorkspaceInput) {
@@ -1858,6 +1967,14 @@ Autonomous analysis confirms that **${topic}** is advancing towards scalable ent
     if (el.openWorkspaceModalBtn) el.openWorkspaceModalBtn.addEventListener('click', openWorkspaceModal);
     if (el.workspaceModalCloseBtn) el.workspaceModalCloseBtn.addEventListener('click', closeWorkspaceModal);
     if (el.workspaceModalCancelBtn) el.workspaceModalCancelBtn.addEventListener('click', closeWorkspaceModal);
+    if (el.modalCopySyncLinkBtn) el.modalCopySyncLinkBtn.addEventListener('click', copyWorkspaceSyncLink);
+    if (el.modalCopyWorkspaceIdBtn) el.modalCopyWorkspaceIdBtn.addEventListener('click', copyWorkspaceIdOnly);
+    if (el.modalSyncWorkspaceBtn) {
+      el.modalSyncWorkspaceBtn.addEventListener('click', () => {
+        const val = el.workspaceInput ? el.workspaceInput.value : '';
+        syncExistingWorkspace(val);
+      });
+    }
     if (el.modalReturnToDefaultBtn) el.modalReturnToDefaultBtn.addEventListener('click', returnToDefaultWorkspace);
     if (el.modalSetCurrentAsDefaultBtn) {
       el.modalSetCurrentAsDefaultBtn.addEventListener('click', () => setDefaultWorkspace(state.workspaceId));
@@ -1880,9 +1997,6 @@ Autonomous analysis confirms that **${topic}** is advancing towards scalable ent
           createNewWorkspace(el.workspaceInput.value);
         }
       });
-    }
-    if (el.generateWorkspaceIdBtn) {
-      el.generateWorkspaceIdBtn.addEventListener('click', generateRandomWorkspace);
     }
 
     // Modal Events
@@ -1941,7 +2055,6 @@ Autonomous analysis confirms that **${topic}** is advancing towards scalable ent
     updatePipelineCards();
 
     await checkBackendConnection();
-    await fetchServerWorkspaces();
   }
 
   if (document.readyState === 'loading') {

@@ -53,7 +53,7 @@
               <span>WORKSPACES</span>
             </span>
             <div class="workspace-header-actions">
-              <button type="button" class="btn-workspace-add" id="toggleCreateWorkspaceBtn" title="Create a new workspace">
+              <button type="button" class="btn-workspace-add" id="toggleCreateWorkspaceBtn" title="Create a new private workspace">
                 <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                 <span>New</span>
               </button>
@@ -61,12 +61,29 @@
           </div>
           <!-- Inline Create Workspace Form -->
           <div class="workspace-create-inline hidden" id="workspaceCreateInline">
-            <input type="text" id="inlineWorkspaceInput" class="workspace-inline-input" placeholder="Workspace name..." maxlength="30" autocomplete="off" spellcheck="false">
+            <input type="text" id="inlineWorkspaceInput" class="workspace-inline-input" placeholder="New workspace name..." maxlength="30" autocomplete="off" spellcheck="false">
             <button type="button" class="btn-inline-save" id="saveInlineWorkspaceBtn" title="Create workspace">Add</button>
             <button type="button" class="btn-inline-cancel" id="cancelInlineWorkspaceBtn" title="Cancel">✕</button>
           </div>
           <!-- Dynamic Workspace Pills: Displays ONLY Current & Created Workspaces -->
           <div class="workspace-pills-list" id="sidebarWorkspacePills" role="tablist" aria-label="Workspaces"></div>
+          <!-- Dedicated Cross-Device Sync & Share Action Toolbar -->
+          <div class="workspace-sync-toolbar" id="workspaceSyncToolbar">
+            <button type="button" class="btn-workspace-tool" id="copyWorkspaceSyncLinkBtn" title="Copy shareable link for mobile or another device">
+              <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+              <span>Share Link</span>
+            </button>
+            <button type="button" class="btn-workspace-tool" id="toggleSyncWorkspaceBtn" title="Sync workspace from another device using Workspace ID">
+              <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
+              <span>Sync Device</span>
+            </button>
+          </div>
+          <!-- Inline Sync Workspace Form -->
+          <div class="workspace-create-inline hidden" id="workspaceSyncInline">
+            <input type="text" id="inlineSyncWorkspaceInput" class="workspace-inline-input" placeholder="Paste Workspace ID to sync..." maxlength="40" autocomplete="off" spellcheck="false">
+            <button type="button" class="btn-inline-save btn-sync-save" id="saveInlineSyncWorkspaceBtn" title="Connect and load workspace">Sync</button>
+            <button type="button" class="btn-inline-cancel" id="cancelInlineSyncWorkspaceBtn" title="Cancel">✕</button>
+          </div>
         </div>
 
         <button id="newResearchBtn" class="btn btn-new-research">
@@ -454,12 +471,29 @@
   <div class="modal-backdrop hidden" id="workspaceModalBackdrop">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="workspaceModalTitle">
       <div class="modal-header">
-        <h3 class="modal-title" id="workspaceModalTitle">Switch Workspace</h3>
+        <h3 class="modal-title" id="workspaceModalTitle">Workspaces & Device Sync</h3>
         <button id="workspaceModalCloseBtn" class="modal-close-btn" aria-label="Close dialog">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       </div>
-      <p class="modal-body">Workspaces provide complete tenant isolation. Sessions and sources are scoped exclusively to the active workspace.</p>
+      <p class="modal-body">Your data is strictly isolated to your private Workspace ID. Use your Workspace ID or Sync Link to access your work on any mobile device or laptop.</p>
+      <!-- Cross Device Sync Card -->
+      <div class="workspace-sync-card">
+        <div class="workspace-sync-info">
+          <span class="workspace-sync-label">Active Workspace:</span>
+          <span class="workspace-sync-val" id="modalActiveWorkspaceVal">default</span>
+        </div>
+        <div class="workspace-sync-actions">
+          <button type="button" class="btn-sync-action" id="modalCopySyncLinkBtn" title="Copy sync link for mobile or another computer">
+            <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+            <span>Copy Device Sync Link</span>
+          </button>
+          <button type="button" class="btn-sync-action" id="modalCopyWorkspaceIdBtn" title="Copy Workspace ID">
+            <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
+            <span>Copy ID</span>
+          </button>
+        </div>
+      </div>
       <!-- Default Workspace Panel -->
       <div class="workspace-default-panel">
         <div class="workspace-default-info">
@@ -472,19 +506,19 @@
         </div>
       </div>
       <div class="workspace-input-wrap">
-        <label for="workspaceInput" class="workspace-input-label">Active Workspace ID</label>
+        <label for="workspaceInput" class="workspace-input-label">Sync from Other Device or Create New</label>
         <div class="workspace-input-row">
-          <input type="text" id="workspaceInput" class="workspace-text-input" placeholder="e.g. engineering, medical, client-101" maxlength="40">
-          <button id="generateWorkspaceIdBtn" class="btn btn-secondary btn-compact-pad" title="Generate UUID workspace ID">Generate</button>
+          <input type="text" id="workspaceInput" class="workspace-text-input" placeholder="e.g. usr-xxxxxx or project-name" maxlength="40">
+          <button id="modalSyncWorkspaceBtn" class="btn btn-secondary btn-compact-pad" title="Sync existing workspace from other device">Sync</button>
+          <button id="workspaceModalConfirmBtn" class="btn btn-primary btn-compact-pad" title="Create new workspace">Create</button>
         </div>
       </div>
       <div class="workspace-discovered-wrap">
-        <span class="workspace-discovered-label">Existing Workspaces:</span>
+        <span class="workspace-discovered-label">Your Workspaces (on this device):</span>
         <div class="workspace-chip-list" id="workspaceChipList"></div>
       </div>
       <div class="modal-actions">
-        <button id="workspaceModalConfirmBtn" class="btn btn-primary">Switch Workspace</button>
-        <button id="workspaceModalCancelBtn" class="btn btn-secondary">Cancel</button>
+        <button id="workspaceModalCancelBtn" class="btn btn-secondary">Close</button>
       </div>
     </div>
   </div>
